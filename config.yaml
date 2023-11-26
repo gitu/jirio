@@ -1,0 +1,28 @@
+jira:
+  fake: true
+  url: https://jira.xxxx.io
+  token: jiratoken
+  projects:
+    - PROJECT
+  # golang duration format
+  refreshInterval: 2m
+  # jira date format
+  refreshUpdatedSince: -2h
+  initialUpdatedSince: -32w
+  maxResults: 1000
+  preloadIssues:
+    - status = "In Progress" AND assignee = currentUser() ORDER BY updated DESC
+  queries:
+    in_progress:
+      name: "In Progress"
+      query: project = PROJECT AND status = "In Progress" AND assignee = currentUser() ORDER BY updated DESC
+      preload: true
+  fields:
+    - "summary"
+    - "title"
+    - "labels"
+    - "updated"
+    - "description"
+  displayFields:
+    - "title"
+    - "updated"
