@@ -8,7 +8,7 @@ Set Margin 20
 Set MarginFill "#674EFF"
 Set BorderRadius 10
 
-Type "./jiro"
+Type "./jirio"
 Sleep 500ms
 Enter
 
