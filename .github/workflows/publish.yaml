@@ -2,8 +2,6 @@ name: publish docker image
 
 on:
   merge_group:
-  schedule:
-    - cron: '22 21 * * *'
   push:
     branches: [ "main" ]
     # Publish semver tags as releases.
