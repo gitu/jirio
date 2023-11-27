@@ -8,6 +8,8 @@ import (
 	"github.com/blevesearch/bleve/v2/mapping"
 	"github.com/spf13/viper"
 	"os"
+	"os/exec"
+	"runtime"
 	"strings"
 	"time"
 
@@ -18,16 +20,13 @@ import (
 	"github.com/charmbracelet/log"
 )
 
-var (
-	focusedStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
-	blurredStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-	cursorStyle         = focusedStyle.Copy()
-	noStyle             = lipgloss.NewStyle()
-	helpStyle           = blurredStyle.Copy()
-	cursorModeHelpStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
+var baseStyle = lipgloss.NewStyle().
+	BorderStyle(lipgloss.NormalBorder()).
+	BorderForeground(lipgloss.Color("240"))
 
-	focusedButton = focusedStyle.Copy().Render("[ Submit ]")
-	blurredButton = fmt.Sprintf("[ %s ]", blurredStyle.Render("Submit"))
+var (
+	focusedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
+	cursorStyle  = focusedStyle.Copy()
 )
 
 type model struct {
@@ -51,10 +50,23 @@ func initialModel(cache *JiraCache) model {
 	m.search.TextStyle = focusedStyle
 	m.search.Cursor.Style = cursorStyle
 
+	s := table.DefaultStyles()
+	s.Header = s.Header.
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderForeground(lipgloss.Color("240")).
+		BorderBottom(true).
+		Bold(false)
+	s.Selected = s.Selected.
+		Foreground(lipgloss.Color("229")).
+		Background(lipgloss.Color("57")).
+		Bold(false)
+	m.searchResults.SetStyles(s)
+
 	m.searchResults.SetColumns([]table.Column{
 		{Title: "Key", Width: 10},
-		{Title: "Summary", Width: 70},
+		{Title: "Summary", Width: 40},
 	})
+	m.searchResults.SetHeight(10)
 
 	return m
 }
@@ -70,7 +82,39 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "ctrl+c", "esc":
 			return m, tea.Quit
+		case "enter":
+			if m.searchResults.SelectedRow() != nil {
+				err := open(viper.GetString("jira.url") + "/browse/" + m.searchResults.SelectedRow()[0])
+				if err != nil {
+					log.Error("could not open browser", err)
+				}
 
+				return m, tea.Batch(tea.Printf("Let's go to %s!", m.searchResults.SelectedRow()[0]))
+			}
+			break
+		case "tab":
+			if m.search.Focused() {
+				m.search.Blur()
+				m.searchResults.Focus()
+			} else {
+				m.searchResults.Blur()
+				m.search.Focus()
+			}
+			return m, tea.Batch()
+		case "down":
+			if m.search.Focused() {
+				m.search.Blur()
+				m.searchResults.Focus()
+				return m, tea.Batch()
+			}
+			break
+		case "up":
+			if m.searchResults.Focused() && m.searchResults.Cursor() == 0 {
+				m.searchResults.Blur()
+				m.search.Focus()
+				return m, tea.Batch()
+			}
+			break
 		case "alt+left", "alt+right":
 			return m, tea.Batch()
 		}
@@ -83,7 +127,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *model) updateInputs(msg tea.Msg) tea.Cmd {
-	_, cmd := m.search.Update(msg)
+	var cmd, cmdt tea.Cmd
+	m.search, cmd = m.search.Update(msg)
 	search, err := m.cache.Search(m.search.Value())
 	if err == nil {
 		var rows []table.Row
@@ -92,8 +137,11 @@ func (m *model) updateInputs(msg tea.Msg) tea.Cmd {
 			rows = append(rows, table.Row{issue.Key, issue.Fields.Summary})
 		}
 		m.searchResults.SetRows(rows)
+		m.searchResults, cmdt = m.searchResults.Update(msg)
+		return tea.Batch(cmd, cmdt)
 	}
 	return tea.Batch(cmd)
+
 }
 
 func (m model) View() string {
@@ -102,7 +150,8 @@ func (m model) View() string {
 	b.WriteString(m.search.View())
 	b.WriteString("\n\n")
 
-	//b.WriteString(m.searchResults.View())
+	b.WriteString(baseStyle.Render(m.searchResults.View()))
+	b.WriteString("\n")
 
 	return b.String()
 }
@@ -208,7 +257,9 @@ type JiraCache struct {
 }
 
 func (j *JiraCache) Search(search string) (*bleve.SearchResult, error) {
-	result, err := j.index.Search(bleve.NewSearchRequest(bleve.NewQueryStringQuery(search)))
+	query := bleve.NewMatchQuery(search)
+	result, err := j.index.Search(
+		bleve.NewSearchRequest(query))
 	if err != nil {
 		log.Error("could not search", err)
 		return result, err
@@ -272,4 +323,23 @@ func initialize() {
 		log.Warn("could not read config file", err)
 	}
 
+}
+
+// https://stackoverflow.com/questions/39320371/how-start-web-server-to-open-page-in-browser-in-golang
+// open opens the specified URL in the default browser of the user.
+func open(url string) error {
+	var cmd string
+	var args []string
+
+	switch runtime.GOOS {
+	case "windows":
+		cmd = "cmd"
+		args = []string{"/c", "start"}
+	case "darwin":
+		cmd = "open"
+	default: // "linux", "freebsd", "openbsd", "netbsd"
+		cmd = "xdg-open"
+	}
+	args = append(args, url)
+	return exec.Command(cmd, args...).Start()
 }
