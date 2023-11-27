@@ -6,8 +6,8 @@ used as a quick way to search for issues and open them in a browser.
 ## Demo
 ![demo of jirio](demo.gif)
 
-## Installation
 
+## Installation
 ```bash
 go get github.com/gitu/jiro@latest
 ```
