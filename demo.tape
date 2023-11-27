@@ -1,7 +1,7 @@
 Output demo.gif
 
 Set FontSize 32
-Set Width 1200
+Set Width 1400
 Set Height 800
 
 Set Margin 20
@@ -21,3 +21,4 @@ Sleep 600ms
 Down
 Sleep 900ms
 Up
+Sleep 5s
