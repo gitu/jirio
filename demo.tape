@@ -9,19 +9,15 @@ Set MarginFill "#674EFF"
 Set BorderRadius 10
 
 Type "./jiro"
-
 Sleep 500ms
-
 Enter
 
 Sleep 1s
 
 Type "TEST"
-
 Sleep 500ms
-
 Down
-
 Sleep 600ms
-
 Down
+Sleep 900ms
+Up
