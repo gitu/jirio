@@ -1,4 +1,4 @@
-module jirio
+module github.com/gitu/jirio
 
 go 1.21
 
