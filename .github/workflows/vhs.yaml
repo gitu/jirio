@@ -21,12 +21,9 @@ jobs:
       - uses: charmbracelet/vhs-action@v2
         with:
           path: 'demo.tape'
-      - uses: stefanzweifel/git-auto-commit-action@v5
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          commit_message: Update generated VHS GIF
-          commit_user_name: vhs-action 📼
-          commit_user_email: actions@github.com
-          commit_author: vhs-action 📼 <actions@github.com>
-          file_pattern: '*.gif'
+      - name: Commit files
+        run: |
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git commit -am "Update generated VHS GIF 📼"
+          git push
