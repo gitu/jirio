@@ -14,11 +14,11 @@ Enter
 
 Sleep 1s
 
-Type "TEST"
-Sleep 500ms
-Down
+Type "teapot"
 Sleep 600ms
 Down
 Sleep 900ms
 Up
+Sleep 1500ms
+Backspace 2
 Sleep 5s
