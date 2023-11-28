@@ -14,11 +14,18 @@ Enter
 
 Sleep 1s
 
-Type "TEST"
-Sleep 500ms
+Type "te"
+Sleep 800ms
+Type "a"
+Sleep 100ms
+Type "p"
+Sleep 100ms
+Type "o"
 Down
 Sleep 600ms
 Down
 Sleep 900ms
 Up
+Sleep 1500ms
+Backspace
 Sleep 5s

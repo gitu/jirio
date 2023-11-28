@@ -92,6 +92,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Batch(tea.Printf("Let's go to %s!", m.searchResults.SelectedRow()[0]))
 			}
 			break
+		case "backspace":
+			if !m.search.Focused() {
+				m.search.Focus()
+				m.searchResults.Blur()
+				m.searchResults.SetCursor(0)
+			}
 		case "tab":
 			if m.search.Focused() {
 				m.search.Blur()
@@ -107,14 +113,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.searchResults.Focus()
 				return m, tea.Batch()
 			}
-			break
 		case "up":
 			if m.searchResults.Focused() && m.searchResults.Cursor() == 0 {
 				m.searchResults.Blur()
 				m.search.Focus()
 				return m, tea.Batch()
 			}
-			break
 		case "alt+left", "alt+right":
 			return m, tea.Batch()
 		}
@@ -188,29 +192,7 @@ func buildCache(ctx context.Context) (j *JiraCache, err error) {
 
 	if viper.GetBool("jira.fake") {
 
-		issues := []jira.Issue{
-			{
-				Key: "TEST-1",
-				Fields: &jira.IssueFields{
-					Summary: "Test Issue 1",
-				},
-			},
-			{
-				Key: "TEST-2",
-				Fields: &jira.IssueFields{
-					Summary: "Test Issue 2",
-				},
-			},
-			{
-				Key: "TEST-3",
-				Fields: &jira.IssueFields{
-					Summary: "Test Issue 3",
-				},
-				Changelog: &jira.Changelog{
-					Histories: nil,
-				},
-			},
-		}
+		issues := buildFakeIssues()
 		err = j.addIssues(issues)
 		return
 	}
@@ -258,6 +240,7 @@ type JiraCache struct {
 
 func (j *JiraCache) Search(search string) (*bleve.SearchResult, error) {
 	query := bleve.NewMatchQuery(search)
+	query.Fuzziness = 2
 	result, err := j.index.Search(
 		bleve.NewSearchRequest(query))
 	if err != nil {
