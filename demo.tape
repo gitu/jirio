@@ -14,14 +14,7 @@ Enter
 
 Sleep 1s
 
-Type "te"
-Sleep 800ms
-Type "a"
-Sleep 100ms
-Type "p"
-Sleep 100ms
-Type "o"
-Down
+Type "teapot"
 Sleep 600ms
 Down
 Sleep 900ms
