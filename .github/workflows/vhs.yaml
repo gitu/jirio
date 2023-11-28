@@ -18,7 +18,7 @@ jobs:
       - uses: charmbracelet/vhs-action@v1
         with:
           path: 'demo.tape'
-      - uses: stefanzweifel/git-auto-commit-action@v4
+      - uses: stefanzweifel/git-auto-commit-action@v5
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
