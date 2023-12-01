@@ -7,7 +7,7 @@ import (
 	"os"
 )
 
-var debugSet = os.Getenv("JIRIO_DEBUG
+var debugSet = os.Getenv("JIRIO_DEBUG")
 
 // dev
 func Debug(msg string) {
