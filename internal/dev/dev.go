@@ -3,15 +3,14 @@ package dev
 import (
 	"fmt"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/spf13/viper"
 	"log"
 	"os"
 )
 
-var debugSet = os.Getenv("JIRIO_DEBUG")
-
 // dev
 func Debug(msg string) {
-	if debugSet != "" {
+	if viper.GetBool("debug") {
 		f, err := tea.LogToFile("jirio.log", "")
 		if err != nil {
 			fmt.Println("fatal:", err)

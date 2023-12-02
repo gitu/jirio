@@ -5,22 +5,35 @@ import (
 )
 
 type keyMap struct {
-	Up      key.Binding
-	Down    key.Binding
-	Compact key.Binding
-	Back    key.Binding
-	Exec    key.Binding
-	Exit    key.Binding
+	Up        key.Binding
+	Down      key.Binding
+	Compact   key.Binding
+	Back      key.Binding
+	Exit      key.Binding
+	OpenIssue key.Binding
+}
+
+func (k keyMap) ShortHelp() []key.Binding {
+	return []key.Binding{
+		k.Exit, k.Compact, k.Back, k.OpenIssue,
+	}
+}
+
+func (k keyMap) FullHelp() [][]key.Binding {
+	return [][]key.Binding{
+		{k.Exit, k.Compact, k.Back, k.OpenIssue},
+		{k.Up, k.Down},
+	}
 }
 
 var KeyMap = keyMap{
 	Back: key.NewBinding(
-		key.WithKeys("esc"),
+		key.WithKeys("esc", "backspace"),
 		key.WithHelp("esc", "back"),
 	),
-	Exec: key.NewBinding(
-		key.WithKeys("e"),
-		key.WithHelp("e", "exec"),
+	OpenIssue: key.NewBinding(
+		key.WithKeys("enter"),
+		key.WithHelp("enter", "Open Issue"),
 	),
 	Exit: key.NewBinding(
 		key.WithKeys("ctrl+c"),

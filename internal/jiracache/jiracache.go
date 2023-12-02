@@ -98,8 +98,10 @@ func (j *jiraCache) GetIssue(key string) (jira.Issue, error) {
 func (j *jiraCache) Search(search string) (*bleve.SearchResult, error) {
 	query := bleve.NewMatchQuery(search)
 	query.Fuzziness = 2
-	result, err := j.index.Search(
-		bleve.NewSearchRequest(query))
+
+	searchRequestOption := bleve.NewSearchRequestOptions(
+		query, 40, 0, false)
+	result, err := j.index.Search(searchRequestOption)
 	if err != nil {
 		log.Error("could not search", err)
 		return result, err

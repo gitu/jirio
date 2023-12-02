@@ -1,36 +1,31 @@
 package app
 
 import (
+	"fmt"
+	"github.com/blevesearch/bleve/v2"
+	"github.com/charmbracelet/bubbles/help"
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/log"
+	"github.com/gitu/jirio/internal/dev"
 	"github.com/gitu/jirio/internal/jiracache"
 	"github.com/gitu/jirio/internal/tui/components/header"
 	"github.com/gitu/jirio/internal/tui/constants"
-	"github.com/gitu/jirio/internal/tui/jirio"
+	"github.com/gitu/jirio/internal/tui/keymap"
+	"github.com/gitu/jirio/internal/tui/style"
 	"github.com/spf13/viper"
 	"os/exec"
 	"runtime"
 	"strings"
 )
 
-var baseStyle = lipgloss.NewStyle().
-	BorderStyle(lipgloss.NormalBorder()).
-	BorderForeground(lipgloss.Color("240"))
-
-var (
-	focusedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
-	cursorStyle  = focusedStyle.Copy()
-)
-
 type Model struct {
 	search        textinput.Model
 	searchResults table.Model
-	cache         jiracache.JiraCache
 	header        header.Model
-	currentPage   jirio.Page
+	cache         jiracache.JiraCache
 }
 
 func InitialModel(cache jiracache.JiraCache) Model {
@@ -38,33 +33,28 @@ func InitialModel(cache jiracache.JiraCache) Model {
 	initialHeader := header.New(
 		constants.LogoString,
 		cache.Url(),
-		"XXX",
+		keymap.KeyMap,
+		help.New(),
 	)
 	m := Model{
+		header:        initialHeader,
 		cache:         cache,
 		search:        textinput.New(),
 		searchResults: table.New(),
-		header:        initialHeader,
 	}
 
 	m.search.Placeholder = "Search"
 	m.search.Focus()
 	m.search.CharLimit = 80
 	m.search.Width = 80
-	m.search.PromptStyle = focusedStyle
-	m.search.TextStyle = focusedStyle
-	m.search.Cursor.Style = cursorStyle
+	m.search.PromptStyle = style.FocusedStyle
+	m.search.TextStyle = style.FocusedStyle
+	m.search.Cursor.Style = style.FocusedStyle
 
 	s := table.DefaultStyles()
-	s.Header = s.Header.
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderForeground(lipgloss.Color("240")).
-		BorderBottom(true).
-		Bold(false)
-	s.Selected = s.Selected.
-		Foreground(lipgloss.Color("229")).
-		Background(lipgloss.Color("57")).
-		Bold(false)
+	s.Header = style.TableHeaderStyle
+	s.Selected = style.TableSelectedStyle
+	s.Cell = style.TableCellStyle
 	m.searchResults.SetStyles(s)
 
 	m.searchResults.SetColumns([]table.Column{
@@ -83,11 +73,30 @@ func (m Model) Init() tea.Cmd {
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-
-		switch msg.String() {
-		case "ctrl+c", "esc":
+		if key.Matches(msg, keymap.KeyMap.Exit) {
 			return m, tea.Quit
-		case "enter":
+		} else if key.Matches(msg, keymap.KeyMap.Up) {
+			if m.searchResults.Focused() && m.searchResults.Cursor() == 0 {
+				m.searchResults.Blur()
+				m.search.Focus()
+			}
+		} else if key.Matches(msg, keymap.KeyMap.Down) {
+			if m.search.Focused() {
+				m.search.Blur()
+				m.searchResults.Focus()
+			}
+		} else if key.Matches(msg, keymap.KeyMap.Compact) {
+			prevHeight := m.header.ViewHeight()
+			m.header.ToggleCompact()
+			m.searchResults.SetHeight(m.searchResults.Height() + prevHeight - m.header.ViewHeight())
+			return m, nil
+		} else if key.Matches(msg, keymap.KeyMap.Back) {
+			if !m.search.Focused() {
+				m.search.Focus()
+				m.searchResults.Blur()
+				m.searchResults.SetCursor(0)
+			}
+		} else if key.Matches(msg, keymap.KeyMap.OpenIssue) {
 			if m.searchResults.SelectedRow() != nil {
 				err := open(viper.GetString("jira.url") + "/browse/" + m.searchResults.SelectedRow()[0])
 				if err != nil {
@@ -96,61 +105,53 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 				return m, tea.Batch(tea.Printf("Let's go to %s!", m.searchResults.SelectedRow()[0]))
 			}
-			break
-		case "backspace":
-			if !m.search.Focused() {
-				m.search.Focus()
-				m.searchResults.Blur()
-				m.searchResults.SetCursor(0)
-			}
-		case "tab":
-			if m.search.Focused() {
-				m.search.Blur()
-				m.searchResults.Focus()
-			} else {
-				m.searchResults.Blur()
-				m.search.Focus()
-			}
-			return m, tea.Batch()
-		case "down":
-			if m.search.Focused() {
-				m.search.Blur()
-				m.searchResults.Focus()
-				return m, tea.Batch()
-			}
-		case "up":
-			if m.searchResults.Focused() && m.searchResults.Cursor() == 0 {
-				m.searchResults.Blur()
-				m.search.Focus()
-				return m, tea.Batch()
-			}
-		case "alt+left", "alt+right":
-			return m, tea.Batch()
 		}
-	}
-
-	// Handle character input and blinking
-	cmd := m.updateInputs(msg)
-
-	return m, cmd
-}
-
-func (m *Model) updateInputs(msg tea.Msg) tea.Cmd {
-	var cmd, cmdt tea.Cmd
-	m.search, cmd = m.search.Update(msg)
-	search, err := m.cache.Search(m.search.Value())
-	if err == nil {
-		var rows []table.Row
-		for _, hit := range search.Hits {
+		break
+	case tea.WindowSizeMsg:
+		m.searchResults.SetWidth(msg.Width)
+		m.searchResults.SetHeight(msg.Height - m.header.ViewHeight() - 6)
+		break
+	case searchResults:
+		m.searchResults.SetRows([]table.Row{})
+		rows := []table.Row{}
+		for _, hit := range msg.search.Hits {
 			issue, _ := m.cache.GetIssue(hit.ID)
 			rows = append(rows, table.Row{issue.Key, issue.Fields.Summary})
 		}
 		m.searchResults.SetRows(rows)
-		m.searchResults, cmdt = m.searchResults.Update(msg)
-		return tea.Batch(cmd, cmdt)
+		break
 	}
-	return tea.Batch(cmd)
 
+	var cmd tea.Cmd
+
+	// Handle character input and blinking
+	m.search, cmd = m.search.Update(msg)
+	if cmd != nil {
+		return m, tea.Batch(cmd, m.searchIssues(m.search.Value()))
+	}
+	// handle search result updates
+	m.searchResults, cmd = m.searchResults.Update(msg)
+	if cmd != nil {
+		return m, cmd
+	}
+
+	return m, nil
+}
+
+type searchResults struct {
+	search *bleve.SearchResult
+}
+
+func (m Model) searchIssues(value string) tea.Cmd {
+	return func() tea.Msg {
+		search, err := m.cache.Search(value)
+		if err != nil {
+			dev.Debug(fmt.Sprintf("ERROR: %v", err))
+			return nil
+		} else {
+			return searchResults{search: search}
+		}
+	}
 }
 
 func (m Model) View() string {
@@ -162,9 +163,7 @@ func (m Model) View() string {
 	b.WriteString(m.search.View())
 	b.WriteString("\n")
 
-	b.WriteString(baseStyle.Render(m.searchResults.View()))
-	b.WriteString("\n")
-
+	b.WriteString(m.searchResults.View())
 	return b.String()
 }
 

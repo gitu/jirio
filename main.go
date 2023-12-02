@@ -50,5 +50,4 @@ func initialize() {
 	if err != nil {
 		log.Warn("could not read config file", err)
 	}
-
 }
