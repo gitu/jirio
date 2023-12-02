@@ -1,4 +1,4 @@
-package main
+package jiracache
 
 import (
 	jira "github.com/andygrunwald/go-jira/v2/onpremise"
