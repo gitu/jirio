@@ -7,14 +7,14 @@ import (
 )
 
 type Model struct {
-	logo, jiraUrl string
-	compact       bool
-	bindings      help.KeyMap
-	helpModel     help.Model
+	jiraUrl   string
+	compact   bool
+	bindings  help.KeyMap
+	helpModel help.Model
 }
 
-func New(logo string, jiraUrl string, keyMap help.KeyMap, helpModel help.Model) (m Model) {
-	return Model{logo: logo, jiraUrl: jiraUrl, bindings: keyMap, helpModel: helpModel}
+func New(jiraUrl string, keyMap help.KeyMap, helpModel help.Model) (m Model) {
+	return Model{jiraUrl: jiraUrl, bindings: keyMap, helpModel: helpModel}
 }
 
 func (m Model) View() string {
@@ -28,7 +28,11 @@ func (m Model) View() string {
 			clusterUrl,
 		)
 	}
-	logo := logoStyle.Render(m.logo)
+	logo := logoStyle.Render(
+		"░▀▀█░▀█▀░█▀▄░▀█▀░█▀█\n" +
+			"░░░█░░█░░█▀▄░░█░░█░█\n" +
+			"░▀▀░░▀▀▀░▀░▀░▀▀▀░▀▀▀",
+	)
 	left := style.Header.Render(lipgloss.JoinVertical(lipgloss.Center, logo, clusterUrl))
 	styledKeyHelp := style.KeyHelp.Render(m.helpModel.FullHelpView(m.bindings.FullHelp()))
 	return lipgloss.JoinHorizontal(lipgloss.Center, left, styledKeyHelp)

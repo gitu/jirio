@@ -12,7 +12,6 @@ import (
 	"github.com/gitu/jirio/internal/dev"
 	"github.com/gitu/jirio/internal/jiracache"
 	"github.com/gitu/jirio/internal/tui/components/header"
-	"github.com/gitu/jirio/internal/tui/constants"
 	"github.com/gitu/jirio/internal/tui/keymap"
 	"github.com/gitu/jirio/internal/tui/style"
 	"github.com/spf13/viper"
@@ -31,7 +30,6 @@ type Model struct {
 func InitialModel(cache jiracache.JiraCache) Model {
 
 	initialHeader := header.New(
-		constants.LogoString,
 		cache.Url(),
 		keymap.KeyMap,
 		help.New(),
