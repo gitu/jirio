@@ -82,11 +82,11 @@ func NewCache(ctx context.Context, config JiraConfig) (JiraCache, error) {
 			log.Error("could not add issues to cache", err)
 			return nil, err
 		}
-		for k, _ := range j.queries {
+		for k, v := range j.queries {
 			if k == "all" {
 				continue
 			}
-			err = j.addIssues(k, filterFakeIssues(issues, k))
+			err = j.addIssues(k, filterFakeIssues(issues, v.query.Name))
 			if err != nil {
 				log.Error("could not add issues to cache", err)
 				return nil, err
