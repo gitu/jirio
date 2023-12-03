@@ -5,18 +5,15 @@ jira:
   projects:
     - PROJECT
   # golang duration format
-  refreshInterval: 2m
+  refreshInterval: 10m
   # jira date format
-  refreshUpdatedSince: -2h
-  initialUpdatedSince: -32w
+  initialIncremental: 32w
   maxResults: 1000
-  preloadIssues:
-    - status = "In Progress" AND assignee = currentUser() ORDER BY updated DESC
   queries:
     in_progress:
       name: "In Progress"
-      query: project = PROJECT AND status = "In Progress" AND assignee = currentUser() ORDER BY updated DESC
-      preload: true
+      jql: project = PROJECT AND status = "In Progress" AND assignee = currentUser()
+      incremental: false
   fields:
     - "summary"
     - "title"
@@ -24,6 +21,7 @@ jira:
     - "updated"
     - "description"
   displayFields:
+    - "key"
     - "title"
     - "updated"
 debug: true
