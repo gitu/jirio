@@ -1,4 +1,5 @@
 jira:
+  fuzziness: 2
   fake: true
   url: https://jira.xxxx.io
   token: jiratoken
