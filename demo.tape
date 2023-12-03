@@ -20,6 +20,7 @@ Down
 Sleep 900ms
 Up
 Sleep 1500ms
+
 Backspace 2
 Sleep 3s
 

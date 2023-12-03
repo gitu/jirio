@@ -2,7 +2,7 @@ package app
 
 import (
 	"fmt"
-	"github.com/blevesearch/bleve/v2"
+	jira "github.com/andygrunwald/go-jira/v2/onpremise"
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/table"
@@ -72,16 +72,8 @@ func InitialModel(cache jiracache.JiraCache) Model {
 	}
 	m.header.SetSelectedQuery(m.queries[m.selectedQuery])
 
+	m = m.loadAllIssues(0)
 	return m
-}
-
-func sortedKeys(queries map[string]string) []string {
-	keys := make([]string, 0, len(queries))
-	for k := range queries {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	return keys
 }
 
 func (m Model) Init() tea.Cmd {
@@ -142,30 +134,39 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.searchResults.SetHeight(msg.Height - m.header.ViewHeight() - 6)
 		break
 	case searchResults:
-		m.searchResults.SetRows([]table.Row{})
-		rows := []table.Row{}
-		for _, hit := range msg.search.Hits {
-			issue, _ := m.cache.GetIssue(hit.ID)
-			rows = append(rows, table.Row{issue.Key, issue.Fields.Summary})
-		}
-		m.searchResults.SetRows(rows)
+		m = m.loadIssues(msg)
 		break
 	}
 
+	var cmds []tea.Cmd
 	var cmd tea.Cmd
 
 	// Handle character input and blinking
+	prevVal := m.search.Value()
 	m.search, cmd = m.search.Update(msg)
 	if cmd != nil {
-		return m, tea.Batch(cmd, m.searchIssues(m.search.Value()))
+		cmds = append(cmds, cmd)
+	}
+	if m.search.Value() != prevVal {
+		cmds = append(cmds, m.searchIssues(m.search.Value()))
 	}
 	// handle search result updates
 	m.searchResults, cmd = m.searchResults.Update(msg)
 	if cmd != nil {
-		return m, cmd
+		cmds = append(cmds, cmd)
 	}
 
-	return m, nil
+	return m, tea.Batch(cmds...)
+}
+
+func (m Model) loadIssues(msg searchResults) Model {
+	m.searchResults.SetRows([]table.Row{})
+	rows := []table.Row{}
+	for _, issue := range msg.issues {
+		rows = append(rows, table.Row{issue.Key, issue.Fields.Summary})
+	}
+	m.searchResults.SetRows(rows)
+	return m
 }
 
 func (m *Model) checkQuerybounds() {
@@ -180,7 +181,7 @@ func (m *Model) checkQuerybounds() {
 }
 
 type searchResults struct {
-	search *bleve.SearchResult
+	issues []jira.Issue
 }
 
 func (m Model) refreshIssues() tea.Cmd {
@@ -196,12 +197,19 @@ func (m Model) refreshIssues() tea.Cmd {
 
 func (m Model) searchIssues(value string) tea.Cmd {
 	return func() tea.Msg {
+		if value == "" {
+			return searchResults{issues: m.cache.GetAllIssues(m.querylist[m.selectedQuery])}
+		}
 		search, err := m.cache.Search(m.querylist[m.selectedQuery], value)
 		if err != nil {
 			dev.Debug(fmt.Sprintf("ERROR: searchIssues %v", err))
 			return nil
 		} else {
-			return searchResults{search: search}
+			issues := make([]jira.Issue, len(search.Hits))
+			for i, issue := range search.Hits {
+				issues[i] = m.cache.GetIssue(issue.ID)
+			}
+			return searchResults{issues: issues}
 		}
 	}
 }
@@ -217,6 +225,24 @@ func (m Model) View() string {
 
 	b.WriteString(m.searchResults.View())
 	return b.String()
+}
+
+func (m Model) loadAllIssues(i int) Model {
+	queryKey := m.querylist[i]
+	msg := searchResults{
+		issues: m.cache.GetAllIssues(queryKey),
+	}
+	m = m.loadIssues(msg)
+	return m
+}
+
+func sortedKeys(queries map[string]string) []string {
+	keys := make([]string, 0, len(queries))
+	for k := range queries {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 // https://stackoverflow.com/questions/39320371/how-start-web-server-to-open-page-in-browser-in-golang
