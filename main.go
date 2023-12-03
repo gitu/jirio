@@ -31,7 +31,7 @@ func main() {
 			Incremental: true,
 		}
 		if viper.GetBool("jira.fake") {
-			queries["all_AI"] = jiracache.JiraQuery{
+			queries["all_TTP"] = jiracache.JiraQuery{
 				Name:        "AI",
 				Jql:         "project in (AI)",
 				Incremental: true,
