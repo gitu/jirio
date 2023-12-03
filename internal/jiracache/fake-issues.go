@@ -2,7 +2,18 @@ package jiracache
 
 import (
 	jira "github.com/andygrunwald/go-jira/v2/onpremise"
+	"strings"
 )
+
+func filterFakeIssues(issues []jira.Issue, query string) []jira.Issue {
+	var filtered []jira.Issue
+	for _, issue := range issues {
+		if strings.HasPrefix(issue.Key, query) {
+			filtered = append(filtered, issue)
+		}
+	}
+	return filtered
+}
 
 func buildFakeIssues() []jira.Issue {
 	return []jira.Issue{

@@ -78,6 +78,20 @@ func NewCache(ctx context.Context, config JiraConfig) (JiraCache, error) {
 	if j.config.UseMockData {
 		issues := buildFakeIssues()
 		err = j.addIssues("all", issues)
+		if err != nil {
+			log.Error("could not add issues to cache", err)
+			return nil, err
+		}
+		for k, _ := range j.queries {
+			if k == "all" {
+				continue
+			}
+			err = j.addIssues(k, filterFakeIssues(issues, k))
+			if err != nil {
+				log.Error("could not add issues to cache", err)
+				return nil, err
+			}
+		}
 		return j, err
 	}
 
