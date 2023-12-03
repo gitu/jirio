@@ -30,6 +30,18 @@ func main() {
 			Jql:         fmt.Sprintf("project in (%s)", toQuotedList(viper.GetStringSlice("jira.projects"))),
 			Incremental: true,
 		}
+		if viper.GetBool("jira.fake") {
+			queries["AI"] = jiracache.JiraQuery{
+				Name:        "AI",
+				Jql:         "project in (AI)",
+				Incremental: true,
+			}
+			queries["AVQ"] = jiracache.JiraQuery{
+				Name:        "AVQ",
+				Jql:         "project in (AVQ)",
+				Incremental: false,
+			}
+		}
 	}
 
 	queryIds := viper.GetStringMap("jira.queries")
