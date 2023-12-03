@@ -23,11 +23,11 @@ Sleep 1500ms
 Backspace 2
 Sleep 3s
 
-Right
+Ctrl+k
 Sleep 2s
 
 Ctrl+h
 Sleep 2s
 
-Left
+Ctrl+j
 Sleep 2s
