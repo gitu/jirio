@@ -6,6 +6,7 @@ import (
 	jira "github.com/andygrunwald/go-jira/v2/onpremise"
 	"github.com/blevesearch/bleve/v2"
 	"github.com/charmbracelet/log"
+	"github.com/gitu/jirio/internal/dev"
 	"time"
 )
 
@@ -63,6 +64,7 @@ type JiraConfig struct {
 	InitialIncremental string
 	RefreshInterval    time.Duration
 	Queries            map[string]JiraQuery
+	Fuzziness          int
 }
 
 func NewCache(ctx context.Context, config JiraConfig) (JiraCache, error) {
@@ -142,15 +144,9 @@ func (j *jiraCache) RefreshIssues() error {
 		return fmt.Errorf("client not initialized")
 	}
 	for _, query := range j.queries {
-		issues, _, err := j.client.Issue.Search(context.Background(), query.query.Jql,
-			&jira.SearchOptions{MaxResults: j.config.MaxResults, Expand: "changelog"})
+		err := j.FetchIssues(context.Background(), query)
 		if err != nil {
-			log.Error("could not fetch issues", err)
-			return err
-		}
-		err = j.addIssues(query.query.Jql, issues)
-		if err != nil {
-			log.Error("could not add issues to cache", err)
+			dev.Debug(fmt.Sprintf("could not fetch issues: %v", err))
 			return err
 		}
 	}
@@ -168,7 +164,7 @@ func (j *jiraCache) GetIssue(key string) jira.Issue {
 
 func (j *jiraCache) Search(query, search string) (*bleve.SearchResult, error) {
 	bq := bleve.NewMatchQuery(search)
-	bq.Fuzziness = 2
+	bq.Fuzziness = j.config.Fuzziness
 
 	searchRequestOption := bleve.NewSearchRequestOptions(bq, 100, 0, false)
 	result, err := j.queries[query].index.Search(searchRequestOption)
@@ -181,7 +177,7 @@ func (j *jiraCache) Search(query, search string) (*bleve.SearchResult, error) {
 
 func (j *jiraCache) FetchIssues(ctx context.Context, query jiraQuery) error {
 	if j.client == nil {
-		log.Error("client not initialized")
+		dev.Debug(fmt.Sprintf("ERROR: client not initialized"))
 		return fmt.Errorf("client not initialized")
 	}
 
@@ -196,24 +192,26 @@ func (j *jiraCache) FetchIssues(ctx context.Context, query jiraQuery) error {
 		q = fmt.Sprintf("%s AND updated >= %s ORDER BY updated DESC", q, fetchSince)
 		return nil
 	}
-
+	dev.Debug(fmt.Sprintf("fetching issues for query: %s", q))
 	issues, _, err := j.client.Issue.Search(ctx, q, &jira.SearchOptions{MaxResults: j.config.MaxResults})
-
 	if err != nil {
-		log.Error("could not fetch issues", err)
+		dev.Debug(fmt.Sprintf("ERROR: could not fetch issues: %v", err))
 		return err
 	}
 
 	err = j.addIssues(query.key, issues)
 	if err != nil {
-		log.Error("could not add issues to cache", err)
+		dev.Debug(fmt.Sprintf("ERROR: could add issues to cache: %v", err))
 		return err
 	}
 	return nil
 }
 
-func (j *jiraCache) addIssues(query string, issues []jira.Issue) error {
-	t := j.queries[query]
+func (j *jiraCache) addIssues(queryId string, issues []jira.Issue) error {
+	t := j.queries[queryId]
+	if t.index == nil {
+		return fmt.Errorf("index for " + queryId + " not initialized")
+	}
 	t.issues = make([]string, len(issues))
 	for i, issue := range issues {
 		j.issues[issue.Key] = issue
@@ -223,6 +221,6 @@ func (j *jiraCache) addIssues(query string, issues []jira.Issue) error {
 			return err
 		}
 	}
-	j.queries[query] = t
+	j.queries[queryId] = t
 	return nil
 }
