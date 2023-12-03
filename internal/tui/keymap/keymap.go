@@ -55,13 +55,13 @@ var KeyMap = keyMap{
 		key.WithHelp("ctrl+h", "compact"),
 	),
 	Left: key.NewBinding(
-		key.WithKeys("ctrl+left"),
-		key.WithHelp("ctrl+←", "left query qte"),
+		key.WithKeys("left"),
+		key.WithHelp("←", "left query qte"),
 		key.WithDisabled(),
 	),
 	Right: key.NewBinding(
-		key.WithKeys("ctrl+right"),
-		key.WithHelp("ctrl+→", "right query"),
+		key.WithKeys("right"),
+		key.WithHelp("→", "right query"),
 		key.WithDisabled(),
 	),
 	Refresh: key.NewBinding(
