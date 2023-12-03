@@ -18,7 +18,7 @@ type keyMap struct {
 
 func (k keyMap) ShortHelp() []key.Binding {
 	return []key.Binding{
-		k.Exit, k.Compact, k.Left, k.Right,
+		k.Exit, k.Compact, k.Back, k.OpenIssue,
 	}
 }
 
@@ -55,13 +55,13 @@ var KeyMap = keyMap{
 		key.WithHelp("ctrl+h", "compact"),
 	),
 	Left: key.NewBinding(
-		key.WithKeys("left"),
-		key.WithHelp("←", "left query "),
+		key.WithKeys("ctrl+left"),
+		key.WithHelp("ctrl+←", "left query"),
 		key.WithDisabled(),
 	),
 	Right: key.NewBinding(
-		key.WithKeys("right"),
-		key.WithHelp("→", "right query"),
+		key.WithKeys("ctrl+right"),
+		key.WithHelp("ctrl+→", "right query"),
 		key.WithDisabled(),
 	),
 	Refresh: key.NewBinding(

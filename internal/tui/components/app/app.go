@@ -17,7 +17,6 @@ import (
 	"github.com/spf13/viper"
 	"os/exec"
 	"runtime"
-	"sort"
 	"strings"
 )
 
@@ -61,9 +60,8 @@ func InitialModel(cache jiracache.JiraCache) Model {
 		{Title: "Summary", Width: 80},
 	})
 
-	queries := cache.Queries()
-	for _, k := range sortedKeys(queries) {
-		m.queries[len(m.querylist)] = queries[k]
+	for k, v := range cache.Queries() {
+		m.queries[len(m.querylist)] = v
 		m.querylist = append(m.querylist, k)
 	}
 
@@ -73,15 +71,6 @@ func InitialModel(cache jiracache.JiraCache) Model {
 	m.header.SetSelectedQuery(m.queries[m.selectedQuery])
 
 	return m
-}
-
-func sortedKeys(queries map[string]string) []string {
-	keys := make([]string, 0, len(queries))
-	for k := range queries {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	return keys
 }
 
 func (m Model) Init() tea.Cmd {
