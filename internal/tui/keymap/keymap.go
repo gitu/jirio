@@ -56,7 +56,7 @@ var KeyMap = keyMap{
 	),
 	Left: key.NewBinding(
 		key.WithKeys("left"),
-		key.WithHelp("←", "left query qte"),
+		key.WithHelp("←", "left query "),
 		key.WithDisabled(),
 	),
 	Right: key.NewBinding(
