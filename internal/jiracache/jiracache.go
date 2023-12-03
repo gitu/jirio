@@ -11,16 +11,18 @@ import (
 
 type JiraCache interface {
 	Search(query, search string) (*bleve.SearchResult, error)
-	GetIssue(key string) (jira.Issue, error)
+	GetIssue(key string) jira.Issue
 	Url() string
 	RefreshIssues() error
 	Queries() map[string]string
+	GetAllIssues(s string) []jira.Issue
 }
 
 type jiraQuery struct {
-	key   string
-	query JiraQuery
-	index bleve.Index
+	key    string
+	query  JiraQuery
+	index  bleve.Index
+	issues []string
 }
 
 type jiraCache struct {
@@ -29,6 +31,14 @@ type jiraCache struct {
 	config      JiraConfig
 	queries     map[string]jiraQuery
 	lastRefresh time.Time
+}
+
+func (j *jiraCache) GetAllIssues(s string) []jira.Issue {
+	issues := make([]jira.Issue, len(j.queries[s].issues))
+	for i, issue := range j.queries[s].issues {
+		issues[i] = j.issues[issue]
+	}
+	return issues
 }
 
 func (j *jiraCache) Queries() map[string]string {
@@ -152,8 +162,8 @@ func (j *jiraCache) Url() string {
 	return j.config.Url
 }
 
-func (j *jiraCache) GetIssue(key string) (jira.Issue, error) {
-	return j.issues[key], nil
+func (j *jiraCache) GetIssue(key string) jira.Issue {
+	return j.issues[key]
 }
 
 func (j *jiraCache) Search(query, search string) (*bleve.SearchResult, error) {
@@ -203,12 +213,16 @@ func (j *jiraCache) FetchIssues(ctx context.Context, query jiraQuery) error {
 }
 
 func (j *jiraCache) addIssues(query string, issues []jira.Issue) error {
-	for _, issue := range issues {
+	t := j.queries[query]
+	t.issues = make([]string, len(issues))
+	for i, issue := range issues {
 		j.issues[issue.Key] = issue
-		err := j.queries[query].index.Index(issue.Key, issue)
+		t.issues[i] = issue.Key
+		err := t.index.Index(issue.Key, issue)
 		if err != nil {
 			return err
 		}
 	}
+	j.queries[query] = t
 	return nil
 }
