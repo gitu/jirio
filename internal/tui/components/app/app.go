@@ -17,6 +17,7 @@ import (
 	"github.com/spf13/viper"
 	"os/exec"
 	"runtime"
+	"sort"
 	"strings"
 )
 
@@ -25,20 +26,20 @@ type Model struct {
 	searchResults table.Model
 	header        header.Model
 	cache         jiracache.JiraCache
+	selectedQuery int
+	queries       map[int]string
+	querylist     []string
 }
 
 func InitialModel(cache jiracache.JiraCache) Model {
 
-	initialHeader := header.New(
-		cache.Url(),
-		keymap.KeyMap,
-		help.New(),
-	)
+	initialHeader := header.New(help.New())
 	m := Model{
 		header:        initialHeader,
 		cache:         cache,
 		search:        textinput.New(),
 		searchResults: table.New(),
+		queries:       make(map[int]string),
 	}
 
 	m.search.Placeholder = "Search"
@@ -56,12 +57,31 @@ func InitialModel(cache jiracache.JiraCache) Model {
 	m.searchResults.SetStyles(s)
 
 	m.searchResults.SetColumns([]table.Column{
-		{Title: "Key", Width: 10},
-		{Title: "Summary", Width: 40},
+		{Title: "Key", Width: 15},
+		{Title: "Summary", Width: 80},
 	})
-	m.searchResults.SetHeight(10)
+
+	queries := cache.Queries()
+	for _, k := range sortedKeys(queries) {
+		m.queries[len(m.querylist)] = queries[k]
+		m.querylist = append(m.querylist, k)
+	}
+
+	if len(m.querylist) > 1 {
+		keymap.KeyMap.Right.SetEnabled(true)
+	}
+	m.header.SetSelectedQuery(m.queries[m.selectedQuery])
 
 	return m
+}
+
+func sortedKeys(queries map[string]string) []string {
+	keys := make([]string, 0, len(queries))
+	for k := range queries {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 func (m Model) Init() tea.Cmd {
@@ -103,6 +123,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 				return m, tea.Batch(tea.Printf("Let's go to %s!", m.searchResults.SelectedRow()[0]))
 			}
+		} else if key.Matches(msg, keymap.KeyMap.Left) {
+			m.selectedQuery--
+			m.checkQuerybounds()
+			m.header.SetSelectedQuery(m.queries[m.selectedQuery])
+			return m, m.searchIssues(m.search.Value())
+		} else if key.Matches(msg, keymap.KeyMap.Right) {
+			m.selectedQuery++
+			m.checkQuerybounds()
+			m.header.SetSelectedQuery(m.queries[m.selectedQuery])
+			return m, m.searchIssues(m.search.Value())
+		} else if key.Matches(msg, keymap.KeyMap.Refresh) {
+			return m, m.refreshIssues()
 		}
 		break
 	case tea.WindowSizeMsg:
@@ -136,15 +168,37 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m *Model) checkQuerybounds() {
+	keymap.KeyMap.Left.SetEnabled(true)
+	keymap.KeyMap.Right.SetEnabled(true)
+	if m.selectedQuery == 0 {
+		keymap.KeyMap.Left.SetEnabled(false)
+	}
+	if m.selectedQuery == len(m.querylist)-1 {
+		keymap.KeyMap.Right.SetEnabled(false)
+	}
+}
+
 type searchResults struct {
 	search *bleve.SearchResult
 }
 
+func (m Model) refreshIssues() tea.Cmd {
+	return func() tea.Msg {
+		err := m.cache.RefreshIssues()
+		if err != nil {
+			dev.Debug(fmt.Sprintf("ERROR: refreshIssues %v", err))
+			return nil
+		}
+		return nil
+	}
+}
+
 func (m Model) searchIssues(value string) tea.Cmd {
 	return func() tea.Msg {
-		search, err := m.cache.Search(value)
+		search, err := m.cache.Search(m.querylist[m.selectedQuery], value)
 		if err != nil {
-			dev.Debug(fmt.Sprintf("ERROR: %v", err))
+			dev.Debug(fmt.Sprintf("ERROR: searchIssues %v", err))
 			return nil
 		} else {
 			return searchResults{search: search}

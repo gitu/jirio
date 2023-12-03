@@ -5,53 +5,93 @@ import (
 	"fmt"
 	jira "github.com/andygrunwald/go-jira/v2/onpremise"
 	"github.com/blevesearch/bleve/v2"
-	"github.com/blevesearch/bleve/v2/mapping"
 	"github.com/charmbracelet/log"
-	"strings"
 	"time"
 )
 
 type JiraCache interface {
-	Search(search string) (*bleve.SearchResult, error)
+	Search(query, search string) (*bleve.SearchResult, error)
 	GetIssue(key string) (jira.Issue, error)
 	Url() string
+	RefreshIssues() error
+	Queries() map[string]string
+}
+
+type jiraQuery struct {
+	key   string
+	query JiraQuery
+	index bleve.Index
 }
 
 type jiraCache struct {
-	issues  map[string]jira.Issue
-	client  *jira.Client
-	index   bleve.Index
-	mapping *mapping.IndexMappingImpl
-	config  JiraConfig
+	issues      map[string]jira.Issue
+	client      *jira.Client
+	config      JiraConfig
+	queries     map[string]jiraQuery
+	lastRefresh time.Time
+}
+
+func (j *jiraCache) Queries() map[string]string {
+	queries := make(map[string]string)
+	for k, v := range j.queries {
+		queries[k] = v.query.Name
+	}
+	return queries
+}
+
+type JiraQuery struct {
+	Name        string
+	Jql         string
+	Incremental bool
 }
 
 type JiraConfig struct {
-	Url                  string
-	Token                string
-	Projects             []string
-	MaxResults           int
-	UseMockData          bool
-	InitialUpdatedSince  string
-	RefreshInterval      time.Duration
-	RefreshIntervalSince string
+	Url                string
+	Token              string
+	MaxResults         int
+	UseMockData        bool
+	InitialIncremental string
+	RefreshInterval    time.Duration
+	Queries            map[string]JiraQuery
 }
 
 func NewCache(ctx context.Context, config JiraConfig) (JiraCache, error) {
 	j := &jiraCache{
-		issues: make(map[string]jira.Issue),
-		config: config,
+		issues:  make(map[string]jira.Issue),
+		config:  config,
+		queries: make(map[string]jiraQuery),
 	}
 	var err error
 
-	j.mapping = bleve.NewIndexMapping()
-	j.index, err = bleve.NewMemOnly(j.mapping)
-	if err != nil {
-		return nil, err
+	for k, v := range config.Queries {
+		index, err := bleve.NewMemOnly(bleve.NewIndexMapping())
+		if err != nil {
+			log.Error("could not create index", err)
+			return nil, err
+		}
+		j.queries[k] = jiraQuery{
+			query: v,
+			index: index,
+		}
 	}
 
 	if j.config.UseMockData {
 		issues := buildFakeIssues()
-		err = j.addIssues(issues)
+		err = j.addIssues("all", issues)
+		if err != nil {
+			log.Error("could not add issues to cache", err)
+			return nil, err
+		}
+		for k, v := range j.queries {
+			if k == "all" {
+				continue
+			}
+			err = j.addIssues(k, filterFakeIssues(issues, v.query.Name))
+			if err != nil {
+				log.Error("could not add issues to cache", err)
+				return nil, err
+			}
+		}
 		return j, err
 	}
 
@@ -65,18 +105,17 @@ func NewCache(ctx context.Context, config JiraConfig) (JiraCache, error) {
 	}
 	j.client = client
 
-	err = j.FetchIssues(ctx, config.InitialUpdatedSince)
-	if err != nil {
-		return nil, err
-	}
-
 	go func(ctx context.Context) {
+		err = j.RefreshIssues()
+		if err != nil {
+			log.Fatal("could not fetch issues", err)
+		}
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case <-time.After(config.RefreshInterval):
-				err := j.FetchIssues(ctx, config.RefreshIntervalSince)
+				err := j.RefreshIssues()
 				if err != nil {
 					log.Fatal("could not fetch issues", err)
 				}
@@ -87,6 +126,28 @@ func NewCache(ctx context.Context, config JiraConfig) (JiraCache, error) {
 	return j, nil
 }
 
+func (j *jiraCache) RefreshIssues() error {
+	if j.client == nil {
+		log.Error("client not initialized")
+		return fmt.Errorf("client not initialized")
+	}
+	for _, query := range j.queries {
+		issues, _, err := j.client.Issue.Search(context.Background(), query.query.Jql,
+			&jira.SearchOptions{MaxResults: j.config.MaxResults, Expand: "changelog"})
+		if err != nil {
+			log.Error("could not fetch issues", err)
+			return err
+		}
+		err = j.addIssues(query.query.Jql, issues)
+		if err != nil {
+			log.Error("could not add issues to cache", err)
+			return err
+		}
+	}
+	j.lastRefresh = time.Now()
+	return nil
+}
+
 func (j *jiraCache) Url() string {
 	return j.config.Url
 }
@@ -95,13 +156,12 @@ func (j *jiraCache) GetIssue(key string) (jira.Issue, error) {
 	return j.issues[key], nil
 }
 
-func (j *jiraCache) Search(search string) (*bleve.SearchResult, error) {
-	query := bleve.NewMatchQuery(search)
-	query.Fuzziness = 2
+func (j *jiraCache) Search(query, search string) (*bleve.SearchResult, error) {
+	bq := bleve.NewMatchQuery(search)
+	bq.Fuzziness = 2
 
-	searchRequestOption := bleve.NewSearchRequestOptions(
-		query, 40, 0, false)
-	result, err := j.index.Search(searchRequestOption)
+	searchRequestOption := bleve.NewSearchRequestOptions(bq, 100, 0, false)
+	result, err := j.queries[query].index.Search(searchRequestOption)
 	if err != nil {
 		log.Error("could not search", err)
 		return result, err
@@ -109,22 +169,32 @@ func (j *jiraCache) Search(search string) (*bleve.SearchResult, error) {
 	return result, err
 }
 
-func (j *jiraCache) FetchIssues(ctx context.Context, since string) error {
+func (j *jiraCache) FetchIssues(ctx context.Context, query jiraQuery) error {
 	if j.client == nil {
 		log.Error("client not initialized")
 		return fmt.Errorf("client not initialized")
 	}
-	query := fmt.Sprintf(`project in (%v) AND updated >= %s ORDER BY updated DESC`,
-		toQuotedList(j.config.Projects), since)
-	issues, _, err := j.client.Issue.Search(ctx, query,
-		&jira.SearchOptions{MaxResults: j.config.MaxResults})
+
+	q := query.query.Jql
+
+	if query.query.Incremental {
+		fetchSince := j.config.InitialIncremental
+		updatedSince := j.lastRefresh
+		if !updatedSince.IsZero() {
+			fetchSince = fmt.Sprintf("-%.0fh", time.Now().Sub(updatedSince).Hours()+2)
+		}
+		q = fmt.Sprintf("%s AND updated >= %s ORDER BY updated DESC", q, fetchSince)
+		return nil
+	}
+
+	issues, _, err := j.client.Issue.Search(ctx, q, &jira.SearchOptions{MaxResults: j.config.MaxResults})
 
 	if err != nil {
 		log.Error("could not fetch issues", err)
 		return err
 	}
 
-	err = j.addIssues(issues)
+	err = j.addIssues(query.key, issues)
 	if err != nil {
 		log.Error("could not add issues to cache", err)
 		return err
@@ -132,22 +202,13 @@ func (j *jiraCache) FetchIssues(ctx context.Context, since string) error {
 	return nil
 }
 
-func (j *jiraCache) addIssues(issues []jira.Issue) error {
+func (j *jiraCache) addIssues(query string, issues []jira.Issue) error {
 	for _, issue := range issues {
 		j.issues[issue.Key] = issue
-		err := j.index.Index(issue.Key, issue)
+		err := j.queries[query].index.Index(issue.Key, issue)
 		if err != nil {
 			return err
 		}
 	}
 	return nil
-}
-
-// toQuotedList returns a string of projects in the format "PROJECT1","PROJECT2",...
-func toQuotedList(projects []string) string {
-	var projectsString string
-	for _, project := range projects {
-		projectsString += "\"" + project + "\","
-	}
-	return strings.TrimRight(projectsString, ",")
 }
