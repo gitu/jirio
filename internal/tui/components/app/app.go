@@ -131,7 +131,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		break
 	case tea.WindowSizeMsg:
 		m.searchResults.SetWidth(msg.Width)
-		m.searchResults.SetHeight(msg.Height - m.header.ViewHeight() - 6)
+		m.searchResults.SetHeight(msg.Height - m.header.ViewHeight() - 2)
 		break
 	case searchResults:
 		m = m.loadIssues(msg)
