@@ -31,12 +31,12 @@ func main() {
 			Incremental: true,
 		}
 		if viper.GetBool("jira.fake") {
-			queries["AI"] = jiracache.JiraQuery{
+			queries["all_AI"] = jiracache.JiraQuery{
 				Name:        "AI",
 				Jql:         "project in (AI)",
 				Incremental: true,
 			}
-			queries["AVQ"] = jiracache.JiraQuery{
+			queries["all_AVQ"] = jiracache.JiraQuery{
 				Name:        "AVQ",
 				Jql:         "project in (AVQ)",
 				Incremental: false,
